@@ -4,15 +4,16 @@ Copy-paste friendly commands used in the workshop
 
 ## Prerequisites
 
-Run the `install.sh` script if you are on Ubuntu 24.04, otherwise install the
-requirements manually.
+1. Have your favorite binary analysis tool ready!
 
-Install the most current clang and llvm-dev in your distribution:
+2. Run the `install.sh` script if you are on Ubuntu 24.04, otherwise install the requirements manually.
+
+3. Install the most current clang and llvm-dev in your distribution:
 ```
 sudo apt install -y llvm-dev clang
 ```
 
-Install [AFL++](https://github.com/AFLplusplus/AFLplusplus)
+4. Install [AFL++](https://github.com/AFLplusplus/AFLplusplus)
 ```
 git clone https://github.com/AFLplusplus/AFLplusplus afl++
 cd afl++
@@ -36,13 +37,14 @@ file usr/sbin/httpd
 strings usr/sbin/httpd | grep GLIBC_
 ```
 
-## Prepare the attack
+## Prepare the fuzzing
 
 Compile glibc-2.30.tar.gz (100% compatability with 2.28 and easier to compile)
 so we can compile compatible shared libraries to preload into our fuzzing target.
 
 ```
 tar xzf glibc-2.30.tar.gz
+cd glibc-2.30
 mkdir build
 cd build
 ../configure --host=arm-linux-gnueabi --build=x86_64-linux-gnu   CC=arm-linux-gnueabi-gcc-9   CXX=arm-linux-gnueabi-g++-9   AR=arm-linux-gnueabi-ar   AS=arm-linux-gnueabi-as   LD=arm-linux-gnueabi-ld   RANLIB=arm-linux-gnueabi-ranlib   STRIP=arm-linux-gnueabi-strip   --prefix=`pwd`/local_install
@@ -80,7 +82,7 @@ errors plus exits when a web request is finished.
 For the internal debug feature:
 ```
 sudo mkdir /jffs
-touch /tmp/HTTPD_DEBUG.log
+touch /tmp/HTTPD_DEBUG
 ```
 Enjoy logs in `/jffs/HTTPD_DEBUG.log` :-)
 This can help analyzing the binary and fixing issues.
@@ -116,6 +118,19 @@ afl-fuzz -i in -o out -Q -x http.dict -- usr/sbin/httpd
 
 Reverse engineer the target binary and look up a suitable address just before
 the `accept()` call, and set this address for `AFL_ENTRYPOINT`.
+
+### Hint: more instances
+
+either spawn the process on different ports - e.g. `CUSTOM_SEND_PORT=81 ... usr/sbin/httpd -p 81` - 
+or run in different namespaces! :-)
+
+```
+NS_NAME="$1"
+ip netns add "$NS_NAME"
+ip netns exec "$NS_NAME" ip link set lo up
+ip netns exec $NS_NAME afl-fuzz -S "$NS_NAME" -Q ... 
+ip netns delete "$NS_NAME"
+```
 
 ### Fuzz with more speed
 
@@ -165,7 +180,7 @@ Due to multiple reads of fgets this target cannot be fuzzed persistently :-(
 
 ## Optional: Make the fuzzing better
 
-1. Ensure you are not running with debug :-) `rm -f /tmp/HTTPD_DEBUG.log`
+1. Ensure you are not running with debug :-) `rm -f /tmp/HTTPD_DEBUG`
 2. Better options for AFL++:
 ```
 export AFL_DISABLE_TRIM=1
@@ -178,4 +193,7 @@ and add the afl-fuzz command line parameter `-c0`
 strings usr/sbin/httpd | grep -E '^[A-Z][a-zA-Z-]*:$' > target.dic
 ```
 add use it with afl-fuzz via: `-x target.dic`
+4. Run multiple parallel instances!
 
+
+THE END.
