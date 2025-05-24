@@ -204,7 +204,9 @@ and add the afl-fuzz command line parameter `-c0`
 
 3. Generate a dictionary and use it:
 ```
-strings usr/sbin/httpd | grep -E '^[A-Z][a-zA-Z-]*:$' > target.dic
+for i in `strings usr/sbin/httpd | grep -E '^[A-Z][a-zA-Z-]*:$'`; do
+  echo \"$i\"
+done > target.dic
 ```
 add use it with afl-fuzz via: `-x target.dic`
 

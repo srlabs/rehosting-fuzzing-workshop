@@ -19,7 +19,7 @@ based on a real-world scenario.
 Read the slides [rehosting-fuzzing-workshop.pdf](rehosting-fuzzing-workshop.pdf)
 and use the [COMMANDS.md](COMMANDS.md) text file to easily copy-paste commands.
 
-**NOTE** This material is meant to support an interactive workshop, the slides
+**NOTE:** This material is meant to support an interactive workshop, the slides
 will not be enough to follow along!
 
 Enjoy!

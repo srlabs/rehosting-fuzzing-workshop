@@ -136,9 +136,9 @@ int setsockopt(int sockfd, int level, int optname, const void *optval,
 }
 
 int (*o_getsockopt)(int sockfd, int level, int optname, void *optval,
-                    unsigned long int optlen);
+                    unsigned long int *optlen);
 int getsockopt(int sockfd, int level, int optname, void *optval,
-               unsigned long int optlen) {
+               unsigned long int *optlen) {
   if (!handle) {
     __get_handle();
   }
@@ -149,7 +149,7 @@ int getsockopt(int sockfd, int level, int optname, void *optval,
     if (debug)
       fprintf(stderr, "DESOCK: intercepted getsockopt on %d for %d\n", sockfd,
               optname);
-    char *o = (char *)optval;
+    int *o = (int *)optval;
     if (o != NULL) {
       *o = 1; // let's hope this is fine
     }
@@ -213,7 +213,7 @@ FILE *fdopen(int fd, const char *mode) {
 
   if (!o_fdopen) {
 
-    if (!handle) { __get_handle; }
+    if (!handle) { __get_handle(); }
 
     o_fdopen = dlsym(handle, "fdopen");
     if (!o_fdopen) {
