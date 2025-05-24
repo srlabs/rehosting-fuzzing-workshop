@@ -73,9 +73,14 @@ Bonus: Reverse-engineer the binary to uncover a debug feature :-)
 
 ### Analyze the target
 
+How is the connection accepted, read from and closed?
+What do we need to hook to exit the target once the connection is done?
 
 ### Result
 
+
+<details>
+  <summary>Spoilers :-)</summary>
 [lib-fuzz-tcp.c](lib-fuzz-tcp.c) - Example shared library which handles all
 errors plus exits when a web request is finished.
 
@@ -86,6 +91,7 @@ touch /tmp/HTTPD_DEBUG
 ```
 Enjoy logs in `/jffs/HTTPD_DEBUG.log` :-)
 This can help analyzing the binary and fixing issues.
+</details>
 
 ## Fuzzing the target via TCP
 
@@ -147,9 +153,12 @@ Create a shared library to intercept these.
 
 ### Result
 
+<details>
+  <summary>Spoilers :-)</summary>
 [lib-fuzz-desock.c](lib-fuzz-desock.c) - Example shared library which handles
 all errors, exits when a web request is finished AND desockets all necessary
 functions. Surprise candidate here: `fdopen` :-)
+</details>
 
 ### Fuzz via desocketing
 
@@ -176,11 +185,15 @@ Reverse engineer the target to see if we can perform persistent fuzzing
 
 ### Result
 
-Due to multiple reads of fgets this target cannot be fuzzed persistently :-(
+<details>
+  <summary>Spoilers :-)</summary>
+Due to multiple reads with fgets this target cannot be fuzzed persistently :-(
+</details>
 
 ## Optional: Make the fuzzing better
 
 1. Ensure you are not running with debug :-) `rm -f /tmp/HTTPD_DEBUG`
+
 2. Better options for AFL++:
 ```
 export AFL_DISABLE_TRIM=1
@@ -188,11 +201,13 @@ export AFL_FAST_CAL=1
 export AFL_ENTRYPOINT=0x190b0
 ```
 and add the afl-fuzz command line parameter `-c0`
+
 3. Generate a dictionary and use it:
 ```
 strings usr/sbin/httpd | grep -E '^[A-Z][a-zA-Z-]*:$' > target.dic
 ```
 add use it with afl-fuzz via: `-x target.dic`
+
 4. Run multiple parallel instances!
 
 
