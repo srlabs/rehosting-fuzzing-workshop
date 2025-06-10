@@ -112,6 +112,8 @@ echo -en 'GET / HTTP/1.0\r\nUser-Agent: fuzzer\r\nHost: localhost\r\n\r\n' > in/
 ```
 
 ```
+afl-system-config
+
 export CUSTOM_SEND_IP=127.0.0.1
 export CUSTOM_SEND_PORT=80
 export AFL_CUSTOM_MUTATOR_LATE_SEND=1
