@@ -21,11 +21,13 @@ git checkout dev
 make
 cd qemu_mode
 export CPU_TARGET=arm
-./build_qemu_mode.sh
+./build_qemu_support.sh
 cd ..
-make -C ../custom_mutators/custom_send_tcp
+make -C custom_mutators/custom_send_tcp
 sudo make install
 ```
+
+----- WAIT HERE UNTIL WE CONTINUE WITH THE SLIDES -----
 
 ## Unpack and analyze the target
 
