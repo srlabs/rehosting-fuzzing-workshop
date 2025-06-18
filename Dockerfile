@@ -28,8 +28,12 @@ RUN cd /afl++ && make && \
 
 COPY ./FW_EBM68_300610244384.zip ./FW_EBM68_300610244384.zip
 COPY ./glibc-2.30.tar.gz ./glibc-2.30.tar.gz
+COPY ./cross-compile.sh ./cross-compile.sh
 
 RUN echo "set encoding=utf-8" > /root/.vimrc && \
     echo ". /etc/bash_completion" >> ~/.bashrc && \
     echo 'alias joe="joe --wordwrap --joe_state -nobackup"' >> ~/.bashrc && \
     echo "export PS1='"'[WORKSHOP \h] \w \$ '"'" >> ~/.bashrc
+
+RUN apt-get install -y curl
+RUN apt-get clean -y
