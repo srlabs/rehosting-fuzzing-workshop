@@ -6,14 +6,13 @@ Copy-paste friendly commands used in the workshop
 
 1. Have your favorite binary analysis tool ready!
 
-2. Run the `install.sh` script if you are on Ubuntu 24.04, otherwise install the requirements manually.
-
-3. Install the most current clang and llvm-dev in your distribution:
+2. Download the docker container for this workshop that has everything needed:
 ```
-sudo apt install -y llvm-dev clang
+docker pull vanhauser/workshop
 ```
 
-4. Install [AFL++](https://github.com/AFLplusplus/AFLplusplus)
+Note that this container has a AFL++ QEMU emulator compiled for ARM.
+This was built like this:
 ```
 git clone https://github.com/AFLplusplus/AFLplusplus afl++
 cd afl++
@@ -23,11 +22,8 @@ cd qemu_mode
 export CPU_TARGET=arm
 ./build_qemu_support.sh
 cd ..
-make -C custom_mutators/custom_send_tcp
 sudo make install
 ```
-
------ WAIT HERE UNTIL WE CONTINUE WITH THE SLIDES -----
 
 ## Unpack and analyze the target
 
@@ -38,6 +34,8 @@ cd _EBM68_3.0.0.6_102_44384-g304340a_370-g24e51_sec_nand_squashfs.pkgtb.extracte
 file usr/sbin/httpd
 strings usr/sbin/httpd | grep GLIBC_
 ```
+
+We see the GLIBC version and the architecture.
 
 ## Prepare the fuzzing
 
@@ -59,11 +57,15 @@ make install
 ### Test the target
 
 You will see that root privileges are required (or the capability to bind to
-privileged ports).
+privileged ports - or run with `-p 8080`).
 
 from the squashfs-root:
 ```
-QEMU_SET_ENV=LD_PRELOAD=lib/libdl.so.2 sudo qemu-arm -L `pwd` usr/sbin/httpd
+sudo qemu-arm -L `pwd` usr/sbin/httpd
+```
+and try to connect from inside of the container:
+```
+curl localhost
 ```
 
 1. Look at the errors
@@ -73,18 +75,18 @@ QEMU_SET_ENV=LD_PRELOAD=lib/libdl.so.2 sudo qemu-arm -L `pwd` usr/sbin/httpd
 
 Bonus: Reverse-engineer the binary to uncover a debug feature :-)
 
+Then write a shared library that hooks everything that is problematic for us.
+Example solution: [lib-nonvram.c](lib-nonvram.c)
+
 ### Analyze the target
 
-How is the connection accepted, read from and closed?
+How is the connection accepted, read from and then closed?
 What do we need to hook to exit the target once the connection is done?
 
 ### Result
 
-
 <details>
   <summary>Spoilers :-)</summary>
-[lib-fuzz-tcp.c](lib-fuzz-tcp.c) - Example shared library which handles all
-errors plus exits when a web request is finished.
 
 For the internal debug feature:
 ```
@@ -93,6 +95,12 @@ touch /tmp/HTTPD_DEBUG
 ```
 Enjoy logs in `/jffs/HTTPD_DEBUG.log` :-)
 This can help analyzing the binary and fixing issues.
+
+Connection `accept()` after a `select()`, then `shutdown()` to close.
+
+[lib-fuzz-tcp.c](lib-fuzz-tcp.c) - Example shared library which handles all
+errors plus exits when a web request is finished.
+
 </details>
 
 ## Fuzzing the target via TCP
@@ -100,7 +108,7 @@ This can help analyzing the binary and fixing issues.
 From the project root compile the shared library:
 
 ```
-cross-compile.sh lib-fuzz-tcp.c -o _EBM68_3.0.0.6_102_44384-g304340a_370-g24e51_sec_nand_squashfs.pkgtb.extracted/squashfs-root/fuzz.so
+cross-compile.sh lib-fuzz-tcp.c -o _EBM68_3.0.0.6_102_44384-g304340a_370-g24e51_sec_nand_squashfs.pkgtb.extracted/squashfs-root/lib-fuzz-fuzz.so
 ```
 
 Then from the squashfs-root run the fuzzer:
@@ -119,20 +127,24 @@ export CUSTOM_SEND_PORT=80
 export AFL_CUSTOM_MUTATOR_LATE_SEND=1
 export AFL_CUSTOM_MUTATOR_LIBRARY=../../afl++/custom_mutators/custom_send_tcp/custom_send_tcp.so
 export QEMU_LD_PREFIX=`pwd`
-export QEMU_SET_ENV=LD_PRELOAD=lib/libdl.so.2:./fuzz.so
+export AFL_PRELOAD=./lib-fuzz-tcp.so
 
-afl-fuzz -i in -o out -Q -x http.dict -- usr/sbin/httpd
+afl-fuzz -i in -o out -Q -c 0 -- usr/sbin/httpd
 ```
 
 ### Hint: more speed
 
-Reverse engineer the target binary and look up a suitable address just before
+Reverse engineer the target binary and look up a suitable address before
 the `accept()` call, and set this address for `AFL_ENTRYPOINT`.
+
+#### Fuzz with more speed
+
+add `export AFL_ENTRYPOINT=0x190c4` => 50% speed increase!
 
 ### Hint: more instances
 
 either spawn the process on different ports - e.g. `CUSTOM_SEND_PORT=81 ... usr/sbin/httpd -p 81` - 
-or run in different namespaces! :-)
+or run in different namespaces (or more docker containers):
 
 ```
 NS_NAME="$1"
@@ -142,16 +154,12 @@ ip netns exec $NS_NAME afl-fuzz -S "$NS_NAME" -Q ...
 ip netns delete "$NS_NAME"
 ```
 
-### Fuzz with more speed
-
-add `export AFL_ENTRYPOINT=0x190b0` => 50% speed increase!
-
 ## Fuzzing the target via desocketing
 
 ### Analysis
 
 Reverse engineer the target to see what needs to be intercepted to desocket the
-application. Of course accept, but what else? getpeername? ... ?
+application. Of course `accept()`, but what else? getpeername? ... ?
 
 Create a shared library to intercept these.
 
@@ -169,7 +177,7 @@ functions. Surprise candidate here: `fdopen` :-)
 From the project root compile the shared library:
 
 ```
-cross-compile.sh lib-fuzz-desock.c -o _EBM68_3.0.0.6_102_44384-g304340a_370-g24e51_sec_nand_squashfs.pkgtb.extracted/squashfs-root/fuzz.so
+cross-compile.sh lib-fuzz-desock.c -o _EBM68_3.0.0.6_102_44384-g304340a_370-g24e51_sec_nand_squashfs.pkgtb.extracted/squashfs-root/lib-fuzz-desock.so
 ```
 
 Then from the squashfs-root run the fuzzer (unset all previous environment
@@ -177,22 +185,56 @@ variables from TCP fuzzing!):
 
 ```
 export QEMU_LD_PREFIX=`pwd`
-export QEMU_SET_ENV=LD_PRELOAD=lib/libdl.so.2:./fuzz.so
-afl-fuzz -i in -o out -Q -- usr/sbin/httpd
+export AFL_PRELOAD=./lib-fuzz-desock.so
+
+afl-fuzz -i in -o out -Q -c0 -- usr/sbin/httpd
 ```
+
+### Hint: more speed
+
+Reverse engineer the target binary and look up a suitable address before
+the `fgets` call, and set this address for `AFL_ENTRYPOINT`.
+
+#### Fuzz with more speed
+
+add `export AFL_ENTRYPOINT=0x1bb84` => 70% speed increase!
+
 
 ## Fuzzing in persistent mode
 
 ### Analysis
 
-Reverse engineer the target to see if we can perform persistent fuzzing
+Reverse engineer the target to see if we can perform persistent fuzzing:
+* Where to start the loop
+* Where to end the loop
+* How to inject the payload into the target
 
 ### Result
 
 <details>
   <summary>Spoilers :-)</summary>
-Due to multiple reads with fgets this target cannot be fuzzed persistently :-(
+* Where to start: 0x195dc
+* Where to end: 0x19688
+* How to inject the payload: Normally we would use shared memory and copy directly to a memory reagion. Due the fgets() used we simple send via `stdin`
+
+So we reuse the desocketing library.
+
 </details>
+
+### Fuzz persistently
+
+```
+export AFL_QEMU_PERSISTENT_ADDR=0x195dc
+export AFL_QEMU_PERSISTENT_RET=0x19688
+export AFL_QEMU_PERSISTENT_GPR=1
+export QEMU_LD_PREFIX=`pwd`
+export AFL_PRELOAD=./lib-fuzz-desock.so
+
+afl-fuzz -Q -i in -o out -c 0 -- usr/sbin/httpd
+```
+
+vs. tcp without AFL_ENTRYPOINT: 1200% faster
+vs. desocket with AFL_ENTRYPOINT: 750% faster
 
 ## Optional: Make the fuzzing better
 
@@ -202,9 +244,7 @@ Due to multiple reads with fgets this target cannot be fuzzed persistently :-(
 ```
 export AFL_DISABLE_TRIM=1
 export AFL_FAST_CAL=1
-export AFL_ENTRYPOINT=0x190b0
 ```
-and add the afl-fuzz command line parameter `-c0`
 
 3. Generate a dictionary and use it:
 ```
