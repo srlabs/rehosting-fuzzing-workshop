@@ -29,7 +29,7 @@ sudo make install
 
 ```
 unzip FW_EBM68_300610244384.zip
-binwalk -e -M EBM68_3.0.0.6_102_44384-g304340a_370-g24e51_sec_nand_squashfs.pkgtb
+binwalk -e --run-as=root EBM68_3.0.0.6_102_44384-g304340a_370-g24e51_sec_nand_squashfs.pkgtb
 cd _EBM68_3.0.0.6_102_44384-g304340a_370-g24e51_sec_nand_squashfs.pkgtb.extracted/squashfs-root/
 file usr/sbin/httpd
 strings usr/sbin/httpd | grep GLIBC_
